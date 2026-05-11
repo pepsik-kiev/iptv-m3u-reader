@@ -320,7 +320,7 @@ def readProviders():
 				providerObj.auto_updates = provider.find("auto_updates") is not None and provider.find("auto_updates").text == "on"
 
 				providerObj.servicename_substitutions, providerObj.epg_substitions, providerObj.servicetype_substitions, providerObj.catchuptype_substitions = readSubstitions(providerObj.scheme)
-				
+
 				providers[providerObj.scheme] = providerObj
 			for provider in elem.findall("stalkerprovider"):
 				providerObj = StalkerProvider()
@@ -970,7 +970,7 @@ class VoDMoviePlayer(MoviePlayer, SubsSupport, SubsSupportStatus):
 			rp = resumePointCache[sref]
 			if sref[2]:
 				# Retain resume point (needed for status icons). Set "last" value the same as "length" value so we know we are at the end.
-				resumePointCache[sref] = [int(time()), resumePointCache[sref][2], resumePointCache[sref][2]] 
+				resumePointCache[sref] = [int(time()), resumePointCache[sref][2], resumePointCache[sref][2]]
 		self.handleLeave("quit")
 
 	def up(self):
@@ -2149,7 +2149,8 @@ class IPTVPluginConfig(Setup):
 		try:
 			configlist.append((_("Size of buffer for http streaming"), config.usage.http_buffersize, _("Configure the buffer size for http streaming. A larger buffer can help with stuttering when the network connection is not stable, but also increases the delay between the stream and live TV.")))
 		except:
-			pass
+			config.usage.http_buffersize = ConfigSelection(default=2048, choices=[(1024, _("1 MB")), (2048, _("2 MB")), (4096, _("4 MB")), (8192, _("8 MB")), (16384, _("16 MB")), (20480, _("20 MB"))])
+			configlist.append((_("Size of buffer for http streaming"), config.usage.http_buffersize, _("Configure the buffer size for http streaming. A larger buffer can help with stuttering when the network connection is not stable, but also increases the delay between the stream and live TV.")))
 		if searchPaths:
 			configlist.append((_("Fallback location for picons"), config.plugins.m3uiptv.fallback_picon_loc, _("Fallback loction for picons used when current active picon location can not be detected.")))
 		configlist.append(("---",))
