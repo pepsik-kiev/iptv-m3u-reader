@@ -302,7 +302,7 @@ class CatchupPlayer(MoviePlayer):
 	def __evServiceStart(self):
 		self.allow_eof = False
 		if self.eof_timer:
-			self.eof_timer.start(config.plugins.m3uiptv.catchup_eof_timeout.value, True)
+			self.eof_timer.start(config.plugins.m3uiptv.catchup_eof_timeout.value * 1000, True)
 		self.current_time_manual = 0
 		if self.progress_timer:
 			self.progress_timer.start(self.progress_change_interval)
