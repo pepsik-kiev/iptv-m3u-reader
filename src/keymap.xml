@@ -14,5 +14,6 @@
 	<map context="M3UIPTVPlayActions">
 		<key id="KEY_PLAY" mapto="play" flags="m" />
 		<key id="KEY_PLAYPAUSE" mapto="play" flags="m" />
+		<key id="KEY_REWIND" mapto="rewind" flags="m" />
 	</map>
 </keymap>

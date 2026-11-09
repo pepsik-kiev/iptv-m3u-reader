@@ -174,19 +174,61 @@ class ServiceRestorer:
 			self.on_done()
 
 
-def playM3UIPTVArchiveEntry(self, event, service):
+def playM3UIPTVArchiveEntry(self, event, service, start_offset=0):
 	stime = event.getBeginTime()
 	duration = event.getDuration()
 	playref, old_ref, is_dynamic, catchup_ref_type = processIPTVService(service, None, event)
 	sref = playref.toString()
 	sref_split = sref.split(":")
 	url = sref_split[10:][0]
-	playref = constructCompleteCatchupSref(catchup_ref_type, service.toString(), url, stime, stime + duration, duration)
+	# The player always keeps the original event start/end; start_offset only
+	# moves the initial play position inside the event.
+	play_start = stime + start_offset
+	playref = constructCompleteCatchupSref(catchup_ref_type, service.toString(), url, play_start, stime + duration, duration - start_offset)
 	playref.setName(event.getEventName())
 	infobar = InfoBar.instance
 	if infobar:
 		LastService = infobar.session.nav.getCurrentServiceReferenceOriginal()
-		infobar.session.open(CatchupPlayer, playref, sref_ret=sref, slist=infobar.servicelist, lastservice=LastService, event=event, orig_url=url, start_orig=stime, end_org=stime + duration, duration=duration, catchup_ref_type=catchup_ref_type, orig_sref=service.toString())
+		infobar.session.open(CatchupPlayer, playref, sref_ret=sref, slist=infobar.servicelist, lastservice=LastService, event=event, orig_url=url, start_orig=stime, end_org=stime + duration, duration=duration, catchup_ref_type=catchup_ref_type, orig_sref=service.toString(), start_offset=start_offset)
+
+
+def injectCatchupInInfoBar():
+	if getattr(InfoBar, "_m3uiptv_rewind_injected", False):
+		return
+	InfoBar._m3uiptv_rewind_injected = True
+	__old_infobar_init__ = InfoBar.__init__
+
+	def __new_infobar_init__(self, *args, **kwargs):
+		__old_infobar_init__(self, *args, **kwargs)
+		self["M3UIPTVRewindActions"] = HelpableActionMap(self, "M3UIPTVPlayActions",
+		{
+			"rewind": (lambda: catchupFromCurrentEvent(self), _("Start catchup 1 minute back")),
+		}, 1)
+
+	InfoBar.__init__ = __new_infobar_init__
+
+
+def catchupFromCurrentEvent(infobar):
+	# Returns 0 when not applicable so the key falls through to the default action.
+	nav = infobar.session.nav
+	service = nav.getCurrentServiceReferenceOriginal()
+	if not service or "catchupdays=" not in service.toString():
+		return 0
+	info = infobar.session.nav.getCurrentService() and infobar.session.nav.getCurrentService().info()
+	event = info and info.getEvent(0)
+	if not event:
+		return 0
+	now = time()
+	stime = event.getBeginTime()
+	duration = event.getDuration()
+	if stime > now or now >= stime + duration:
+		return 0
+	match = re.search(r"catchupdays=(\d*)", service.toString())
+	if not match or now - stime > datetime.timedelta(days=int(match.group(1))).total_seconds():
+		return 0
+	start_offset = max(0, int(now - 60 - stime))
+	playM3UIPTVArchiveEntry(infobar, event, service, start_offset)
+	return 1
 
 
 def constructCompleteCatchupSref(catchup_service_type, sref, url_play, stime, etime, duration):
@@ -198,7 +240,7 @@ def constructCompleteCatchupSref(catchup_service_type, sref, url_play, stime, et
 
 
 class CatchupPlayer(MoviePlayer):
-	def __init__(self, session, service, sref_ret="", slist=None, lastservice=None, event=None, orig_sref="", orig_url="", start_orig=0, end_org=0, duration=0, catchup_ref_type=4097):
+	def __init__(self, session, service, sref_ret="", slist=None, lastservice=None, event=None, orig_sref="", orig_url="", start_orig=0, end_org=0, duration=0, catchup_ref_type=4097, start_offset=0):
 		MoviePlayer.__init__(self, session, service=service, slist=slist, lastservice=lastservice)
 		self.skinName = ["CatchupPlayer", "ArchiveMoviePlayer", "MoviePlayer"]
 		self["NumberSeekActions"] = NumberActionMap(["NumberActions"],
@@ -226,8 +268,8 @@ class CatchupPlayer(MoviePlayer):
 		self.sref_ret = sref_ret
 		self.start_orig = start_orig
 		self.end_orig = end_org
-		self.start_curr = start_orig
-		self.duration_curr = duration
+		self.start_curr = start_orig + start_offset
+		self.duration_curr = duration - start_offset
 		self.current_time_manual = 0
 		self.allow_eof = False
 		self.eof_timer = eTimer()
@@ -237,10 +279,10 @@ class CatchupPlayer(MoviePlayer):
 		self.progress_timer.start(self.progress_change_interval)
 		self.seek_timer = eTimer()
 		self.seek_timer.callback.append(self.onSeekRequest)
-		self.seekTo_pos = 0
+		self.seekTo_pos = start_offset
 		self.invoked_seek_stime = -1
 		self.resume_point = None
-		self.isSeeking = False
+		self.isSeeking = bool(start_offset)
 		self["progress"].value = 0
 		self["progress_summary"].value = 0
 		self["time_info"] = Label("")

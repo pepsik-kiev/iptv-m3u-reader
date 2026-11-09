@@ -22,7 +22,7 @@ from .VODProvider import VODProvider
 from .IPTVProviders import providers, processService as processIPTVService
 from .WebManager import startWebManager
 from .VodPager import VodPager, EagerPager
-from .IPTVCatchupPlayer import injectCatchupInEPG, ServiceRestorer
+from .IPTVCatchupPlayer import injectCatchupInEPG, injectCatchupInInfoBar, ServiceRestorer
 from .epgimport_helper import overwriteEPGImportEPGSourceInit
 from .Variables import SERVICEAPP_AVAILABLE, PROVIDER_FOLDER, USER_IPTV_PROVIDERS_FILE, USER_IPTV_PROVIDER_SUBSTITUTIONS_FILE, CATCHUP_DEFAULT, CATCHUP_APPEND, CATCHUP_SHIFT, CATCHUP_XTREME, CATCHUP_XTREME_60, CATCHUP_STALKER, CATCHUP_FLUSSONIC, CATCHUP_VOD, REQUEST_USER_AGENT, USER_IPTV_MOVIE_CATEGORIES_FILE
 from Screens.Screen import Screen, ScreenSummary
@@ -597,6 +597,7 @@ def injectIntoNavigation(session):
 		NavigationInstance.instance.getCurrentlyPlayingServiceOrGroup = getCurrentlyPlayingServiceOrGroup.__get__(NavigationInstance.instance, Navigation)
 
 	injectCatchupInEPG()
+	injectCatchupInInfoBar()
 	overwriteEPGImportEPGSourceInit()
 
 
@@ -788,7 +789,13 @@ def recordServiceWithIPTVATV(self, ref, simulate=False, type=8):
 
 
 def playRealService(self, nnref):
-	# self.pnav.stopService()
+	# Navigation defers the real start (stopService + play) to the next event loop iteration. If the
+	# resolved ref arrives before that has run (fast/cached resolve, or the callback invoked
+	# synchronously by the provider), playing now would be killed by the pending stopService and the
+	# service would never start. Hand it over; Navigation replays it once the pending play ran.
+	if getattr(self, "_pendingPlay", None) is not None:
+		self._deferredRealPlay = nnref
+		return
 	self.currentlyPlayingServiceReference = nnref
 	self.pnav.playService(nnref)
 
